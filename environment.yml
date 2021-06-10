@@ -1,10 +1,11 @@
-name: environment
+name: 
 channels:
   - defaults
 dependencies:
+  - python=3.9
   - cython
   - numpy
   - scipy
-  - pandas
   - scikit-learn
-prefix: ~/miniconda3/envs/notebook_env
+  - pandas
+prefix: /home/wppj21/miniconda3/envs/notebook_env
