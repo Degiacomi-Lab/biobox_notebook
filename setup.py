@@ -1,57 +1,125 @@
-# to compile cython sources, call:
-# python setup.py install
-#
-# Compilation can otherwise be obtained via the following commands:
-# cython -a graph.pyx
-# gcc -shared -pthread -fPIC -fwrapv -O2 -Wall -fno-strict-aliasing -I/usr/include/python2.6 -o graph.so graph.c
-# cython -a fastmath.pyx
-# gcc -shared -pthread -fPIC -fwrapv -O3 -Wall -fno-strict-aliasing -I/usr/include/python2.6 -o fastmath.so fastmath.c
-#
-# to build documentation:
-# sphinx-build -b html doc doc/html
-
+import io
 import os
-import shutil
-import numpy as np
-from distutils.core import setup
-from distutils.command.build_ext import build_ext
-from Cython.Build import cythonize
+import sys
+from shutil import rmtree
+
+from setuptools import find_packages, setup, Command
+
+# Package meta-data.
+NAME = 'biobox'
+DESCRIPTION = 'a toolbox for the manipulation, modelling and analysis of molecular structures.'
+URL = 'https://github.com/degiacom/biobox'
+EMAIL = 'matteo.degiacomi@gmail.com'
+AUTHOR = 'Matteo Degiacomi'
+REQUIRES_PYTHON = '>=3.9'
+VERSION = '0.0.0'
+
+# What packages are required for this module to be executed?
+REQUIRED = [
+    'numpy', 'scipy', 'matplotlib', 'scikit-learn', 'cython'
+]
+
+# What packages are optional?
+EXTRAS = {
+    # 'fancy feature': ['django'],
+}
+
+# The rest you shouldn't have to touch too much :)
+# ------------------------------------------------
+# Except, perhaps the License and Trove Classifiers!
+# If you do change the License, remember to change the Trove Classifier for that!
+
+here = os.path.abspath(os.path.dirname(__file__))
+
+# Import the README and use it as the long-description.
+# Note: this will only work if 'README.md' is present in your MANIFEST.in file!
+try:
+    with io.open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
+        long_description = '\n' + f.read()
+except FileNotFoundError:
+    long_description = DESCRIPTION
+
+# Load the package's __version__.py module as a dictionary.
+about = {}
+if not VERSION:
+    with open(os.path.join(here, NAME, '__version__.py')) as f:
+        exec(f.read(), about)
+else:
+    about['__version__'] = VERSION
 
 
-class InstallCommand(build_ext):
+class UploadCommand(Command):
+    """Support setup.py upload."""
+
+    description = 'Build and publish the package.'
+    user_options = []
+
+    @staticmethod
+    def status(s):
+        """Prints things in bold."""
+        print('\033[1m{0}\033[0m'.format(s))
+
+    def initialize_options(self):
+        pass
+
+    def finalize_options(self):
+        pass
 
     def run(self):
-
-        build_ext.run(self)
-
         try:
-            for root, dirnames, filenames in os.walk("build"):
-                for filename in filenames:
-                    extension = filename.split(".")[-1]
-                    if extension in ["pyd", "so"]:
-                        os.rename(os.path.join(root, filename), filename)
+            self.status('Removing previous builds…')
+            rmtree(os.path.join(here, 'dist'))
+        except OSError:
+            pass
 
-        except Exception as ex:
-            print("files already exist, skipping...")
+        self.status('Building Source and Wheel (universal) distribution…')
+        os.system('{0} setup.py sdist bdist_wheel --universal'.format(sys.executable))
 
-        shutil.rmtree("build")
+        self.status('Uploading the package to PyPI via Twine…')
+        os.system('twine upload dist/*')
 
-os.chdir("lib")
+        self.status('Pushing git tags…')
+        os.system('git tag v{0}'.format(about['__version__']))
+        os.system('git push --tags')
+        
+        sys.exit()
 
-# small hack to get around a problem in older cython versions, i.e.
-# an infinite dependencies loop when __init__.py file is in the same folder as pyx
-if os.path.exists("__init__.py"):
-    os.rename("__init__.py", "tmp")
+os.system('python biobox/setup.py install')
 
-
+# Where the magic happens:
 setup(
-    include_dirs=[np.get_include()],
-    ext_modules=cythonize(
-        "*.pyx",
-        include_path=[np.get_include()],
-            compiler_directives={'boundscheck': False, 'wraparound': False}),
-    cmdclass={'install': InstallCommand}
-)
+    name=NAME,
+    version=about['__version__'],
+    description=DESCRIPTION,
+    long_description=long_description,
+    long_description_content_type='text/markdown',
+    author=AUTHOR,
+    author_email=EMAIL,
+    python_requires=REQUIRES_PYTHON,
+    url=URL,
+    packages=find_packages(exclude=('tests',)),
+    # If your package is a single module, use this instead of 'packages':
+    # py_modules=['mypackage'],
 
-# continuation of the small hack
-os.rename("tmp", "__init__.py")
+    # entry_points={
+    #     'console_scripts': ['mycli=mymodule:cli'],
+    # },
+    install_requires=REQUIRED,
+    extras_require=EXTRAS,
+    include_package_data=True,
+    license='MIT',
+    classifiers=[
+        # Trove classifiers
+        # Full list: https://pypi.python.org/pypi?%3Aaction=list_classifiers
+        'License :: OSI Approved :: MIT License',
+        'Programming Language :: Python',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: Implementation :: CPython',
+        'Programming Language :: Python :: Implementation :: PyPy'
+    ],
+    # $ setup.py publish support.
+    cmdclass={
+        'upload': UploadCommand,
+    },
+)
