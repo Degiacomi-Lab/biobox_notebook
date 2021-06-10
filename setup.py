@@ -6,7 +6,7 @@ from shutil import rmtree
 from setuptools import find_packages, setup, Command
 
 # Package meta-data.
-NAME = 'BiobOx'
+NAME = 'biobox'
 DESCRIPTION = 'a toolbox for the manipulation, modelling and analysis of molecular structures.'
 URL = 'https://github.com/degiacom/biobox'
 EMAIL = 'matteo.degiacomi@gmail.com'
