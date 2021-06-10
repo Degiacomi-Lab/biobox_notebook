@@ -1,4 +1,9 @@
 name: environment
+channels:
+  - defaults
 dependencies:
+  - cython
   - numpy
   - scipy
+  - scikit-learn
+prefix: ~/miniconda3/envs/notebook_env
