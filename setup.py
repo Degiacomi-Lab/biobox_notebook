@@ -16,7 +16,7 @@ VERSION = '0.0.0'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
-    'pandas', 'numpy', 'scipy', 'matplotlib', 'scikit-learn', 'cython'
+    'pandas', 'numpy', 'scipy', 'scikit-learn', 'cython'
 ]
 
 # What packages are optional?
