@@ -12,11 +12,11 @@ URL = 'https://github.com/degiacom/biobox'
 EMAIL = 'matteo.degiacomi@gmail.com'
 AUTHOR = 'Matteo Degiacomi'
 REQUIRES_PYTHON = '>=3.9'
-VERSION = None
+VERSION = '0.0.0'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
-    'numpy', 'scipy', 'matplotlib', 'scikit-learn', 'cython'
+    'pandas', 'numpy', 'scipy', 'scikit-learn', 'cython'
 ]
 
 # What packages are optional?
@@ -83,8 +83,9 @@ class UploadCommand(Command):
         os.system('git push --tags')
         
         sys.exit()
-
-
+os.chdir('biobox')
+os.system('python setup.py install')
+os.chdir('..')
 # Where the magic happens:
 setup(
     name=NAME,
