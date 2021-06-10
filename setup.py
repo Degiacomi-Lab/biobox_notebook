@@ -83,9 +83,9 @@ class UploadCommand(Command):
         os.system('git push --tags')
         
         sys.exit()
-
-os.system('python biobox/setup.py install')
-
+os.chdir('biobox')
+os.system('python setup.py install')
+os.chdir('..')
 # Where the magic happens:
 setup(
     name=NAME,
