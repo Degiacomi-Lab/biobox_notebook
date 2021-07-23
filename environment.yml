@@ -8,4 +8,5 @@ dependencies:
   - scipy
   - scikit-learn
   - pandas
+  - matplotlib
 prefix: /home/wppj21/miniconda3/envs/notebook_env
