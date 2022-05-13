@@ -6,3 +6,5 @@ pandas==1.2.4
 scikit-learn==0.24.2
 threadpoolctl==2.1.0
 matplotlib==3.4.2
+scipy==1.8.0
+nglview==3.0.3

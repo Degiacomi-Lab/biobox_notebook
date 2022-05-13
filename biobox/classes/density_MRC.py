@@ -1,20 +1,8 @@
-# Copyright (c) 2014-2021 Matteo Degiacomi
-#
-# EMnIM is free software ;
-# you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation ;
-# either version 2 of the License, or (at your option) any later version.
-# EMnIM is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY ;
-# without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-# See the GNU General Public License for more details.
-# You should have received a copy of the GNU General Public License along with SBT ;
-# if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
-#
-# Author : Matteo Degiacomi, matteothomas.degiacomi@gmail.com
-
-# from CHIMERA files chimera/share/VolumeData/mrc, plus readarray.py and griddata.py
-
 # Read 'mrc' or 'ccp4' or 'imod' map file format electron microscope data.
 # Byte swapping will be done if needed.
+#
+# NOTE: the code below is a Python 3 translation of CHIMERA files
+# chimera/share/VolumeData/mrc, readarray.py and griddata.py (2014 version, in Python 2)
 
 import numpy as np
 import os.path
@@ -38,6 +26,7 @@ class Data_Cache:
         self.data = {}
         self.groups = {}
 
+        
     # ---------------------------------------------------------------------------
     #
     def cache_data(self, key, value, size, description, groups = []):
@@ -171,7 +160,6 @@ class MRC_Grid:
             d.element_type = np.dtype(d.element_type)
         self.value_type = d.element_type                # numpy dtype.
 
-
         # Parameters defining how data matrix is positioned in space
         self.origin = tuple(d.data_origin)
         self.original_origin = self.origin
@@ -183,7 +171,6 @@ class MRC_Grid:
         self.ijk_to_xyz_transform = None
         self.xyz_to_ijk_transform = None
 
-        #self.rgba = default_color                        # preferred color for displaying data
 
         global data_cache
         self.data_cache = data_cache
@@ -454,7 +441,7 @@ class MRC_Data:
         if (v['type'] == 'mrc2000' and
                 (v['zorigin'] != 0 or v['xorigin'] != 0 or v['yorigin'] != 0)):
             #
-            # This is a new MRC 2000 format file.    The xyz origin header parameters
+            # This is a new MRC 2000 format file. The xyz origin header parameters
             # are used instead of using ncstart, nrstart nsstart for new style files,
             # provided the xyz origin specified is not zero.    It turns out the
             # xorigin, yorigin, zorigin values are zero in alot of new files while
@@ -868,7 +855,7 @@ def read_text_floats(path, byte_offset, size, array = None,
 
         try:
                 read_float_lines(f, array, line_format, progress)
-        except SyntaxError as msg:
+        except SyntaxError:
                 f.close()
                 raise
 
@@ -972,10 +959,10 @@ def closest_mrc2000_type(type1):
 
 # -----------------------------------------------------------------------------
 #can read 'mrc' or 'ccp4' or 'imod'
-def read_density(filename,extension):
+def read_density(filename, extension):
 
     try:
-        grid_data= MRC_Grid(filename, extension)
+        grid_data = MRC_Grid(filename, extension)
     except Exception as e:
         raise Exception('cannot load density map %s: %s'%(filename, e))
 
@@ -1006,12 +993,12 @@ if __name__=="__main__":
 
     import os
     filename = "..%stest%sEMD-1080.mrc"%(os.sep, os.sep)
+
+    filename = "..%s..%sEMD-1080.mrc"%(os.sep, os.sep)
     
-    #try:
-    [density,data] = read_density(filename, 'mrc')
+    [density, data] = read_density(filename, 'mrc')
+
     print("origin: %s"%np.array(data.origin))
     print("shape: %s"%np.array(density.shape))
     print("delta: %s"%(np.identity(3)*np.array(data.mrc_data.data_step)))
         
-    #except Exception as e:
-    #    print("%s"%e)

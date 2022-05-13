@@ -1,4 +1,4 @@
-# Copyright (c) 2014-2017 Matteo Degiacomi
+# Copyright (c) 2014-2022 Matteo Degiacomi
 #
 # BiobOx is free software ;
 # you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation ;
@@ -9,7 +9,7 @@
 # You should have received a copy of the GNU General Public License along with BiobOx ;
 # if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
 #
-# Author : Matteo Degiacomi, matteothomas.degiacomi@gmail.com
+# Author : Matteo Degiacomi, matteo.degiacomi@gmail.com
 
 import os
 from copy import deepcopy
@@ -38,7 +38,7 @@ class Molecule(Structure):
                    'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x',
                    'y', 'z', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0')
 
-    def __init__(self):
+    def __init__(self, fname=""):
         '''
         At instantiation, properties associated to every individual atoms are stored in a pandas Dataframe self.data.
         The columns of the self.data have the following names:
@@ -84,6 +84,27 @@ class Molecule(Structure):
                                       "H09" : "H", "H0A" : "H", "H0B" : "H", "N01" : "N", "C03": "C", "C05": "C", "O06": "O", "H08": "H", "H0C": "H", "H0D": "H", 
                                       "H0E": "H", "H0F": "H", "O03": "O", "H04": "H", "H06": "H", "OD": "O", "O02" : "O", "HO" : "H", "OT" : "O", "O1" : "O", "O2" : "O"}
 
+
+        # if a filename is provided, attempt loading the file according to its file extension
+        if fname != "":
+            msg = "If you are positive Biobox can read this file, please instantiate Molecule and call the appropriate file parsing method."
+            fsplit = os.path.basename(fname).split(".")
+            if len(fsplit)<2:
+                raise Exception("Cannot determine file extension. %s"%msg)
+
+            ext = fsplit[-1]
+            if ext == "pdb":
+                self.import_pdb(fname)
+            elif ext == "pqr":
+                self.import_pqr(fname)
+            elif ext == "md":
+                self.import_md(fname)
+            elif ext == "gro":
+                self.import_gro(fname)
+            else:
+                raise Exception("File extension %s unknown. %s"%(ext, msg))
+
+
     def __add__(self, other):
         from biobox.classes.multimer import Multimer
         M = Multimer()
@@ -103,6 +124,7 @@ class Molecule(Structure):
             return self.knowledge[str(prop)]
         else:
             raise Exception("entry %s not found in knowledge base!" % prop)
+
 
     def import_pdb(self, pdb, include_hetatm=False):
         '''
@@ -544,6 +566,64 @@ class Molecule(Structure):
         self.data["occupancy"] = self.data["occupancy"].astype(float)
         self.data["beta"] = self.data["beta"].astype(float)
 
+    def import_gro(self, filename):
+        '''
+        read a gro possibly containing multiple structures.
+
+        :param filename: name of .gro file to import
+        '''
+
+        if not os.path.isfile(filename):
+            raise Exception("ERROR: %s not found!" % filename)
+
+        self.clear()
+
+        # print "\n> loading %s..."%filename
+        fin = open(filename, "r")
+
+        line = fin.readline()
+
+        d_data = []
+        b = []
+        while line:
+            cnt = 0
+            d = []
+            atoms = int(fin.readline())
+            d_data = []
+            while cnt < atoms:
+                w = fin.readline()
+                # Read array as defined by .gro style characters (res int, res, atomtype, int, x_coord, y_coord, z_coord)
+                w = [w[0:5].strip(), w[5:10].strip(), w[10:15].strip(), w[15:20].strip(), w[20:28].strip(), w[28:36].strip(), w[36:44].strip()]
+                resname = w[1]; resnumber=w[0]
+
+                # read data useful for indexing (guess what is missing)
+                d_data.append(["ATOM", w[3], w[2], resname, "A", resnumber, "0.0", "0.0", ""])
+                d.append([w[4], w[5], w[6]])
+                cnt += 1
+
+            # add one conformation (in Angstrom) and store its box size in
+            # temporary list
+            self.add_xyz(np.array(d).astype(float) * 10)
+            b.append(fin.readline().split())
+
+            line = fin.readline()  # attempt to get header of next frame
+
+        # store data information and box size for every frame
+        self.properties['box'] = np.array(b).astype(float) * 10
+
+
+        #building dataframe
+        data = np.array(d_data).astype(str)
+        cols = ["atom", "index", "name", "resname", "chain", "resid", "occupancy", "beta", "atomtype"]
+        idx = np.arange(len(data))
+        self.data = pd.DataFrame(data, index=idx, columns=cols)
+
+        #add additional information about van der waals radius and atoms charge
+        self.data['radius'] = np.ones(len(d_data)) * self.know('atom_vdw')['.']
+        self.data['charge'] = np.zeros(len(d_data))
+
+        fin.close()
+
     def assign_atomtype(self):
         '''
         guess atomtype from atom names
@@ -572,10 +652,18 @@ class Molecule(Structure):
                     ["O", 1.52, 1.15, 0.42], ["S", 1.8, 1.62, 0.54],
                     ["N", 1.55, 1.2, 0.44]]
 
+        # attempt assigning atomtypes, if any is unknown, and test if successful
+        if np.any(self.data["atomtype"].values == ''):
+            self.assign_atomtype()
+
+        if np.any(self.data["atomtype"].values == ''):
+            idxs = np.where(self.data["atomtype"].values == '')[0]
+            raise Exception("Unknown atomtype for:\n%s"%self.data.iloc[idxs])
+
         dens = []
         for d in atomdata:
             # select atomtype and point only to those coordinates
-            pts = self.points[[self.data["atomtype"].values == d[0]]]
+            pts = self.points[self.data["atomtype"].values == d[0]]
 
             # if there are atoms from a certain type
             if len(pts) > 0:
@@ -601,7 +689,8 @@ class Molecule(Structure):
         D = Density()
         D.properties['density'] = dens
         D.properties['size'] = np.array(dens.shape)
-        D.properties['origin'] = np.mean(pts, axis=0) - step * np.array(dens.shape) / 2.0
+        # still appears to be some small error (but is dependent on molecule), perhaps discretisation of space?
+        D.properties['origin'] = np.min(self.points, axis=0) - (kernel_half_width) / 2. + step #np.mean(pts, axis=0) - step * np.array(dens.shape) / 2.0
         D.properties['delta'] = np.identity(3) * step
         D.properties['format'] = 'dx'
         D.properties['filename'] = ''
@@ -813,65 +902,6 @@ class Molecule(Structure):
             raise Exception("ERROR: no symmetry matrix found in pdb %s" %self.properties["filename"])
 
         return self._apply_matrices(self.properties["symmetry"])
-
-    def import_gro(self, filename):
-        '''
-        read a gro possibly containing multiple structures.
-
-        :param filename: name of .gro file to import
-        '''
-
-        if not os.path.isfile(filename):
-            raise Exception("ERROR: %s not found!" % filename)
-
-        self.clear()
-
-        # print "\n> loading %s..."%filename
-        fin = open(filename, "r")
-
-        line = fin.readline()
-
-        d_data = []
-        b = []
-        while line:
-            cnt = 0
-            d = []
-            atoms = int(fin.readline())
-            d_data = []
-            while cnt < atoms:
-                w = fin.readline()
-                # Read array as defined by .gro style characters (res int, res, atomtype, int, x_coord, y_coord, z_coord)
-                w = [w[0:5].strip(), w[5:10].strip(), w[10:15].strip(), w[15:20].strip(), w[20:28].strip(), w[28:36].strip(), w[36:44].strip()]
-                resname = w[1]; resnumber=w[0]
-
-                # read data useful for indexing (guess what is missing)
-                d_data.append(["ATOM", w[3], w[2], resname, "A", resnumber, "0.0", "0.0", ""])
-                d.append([w[4], w[5], w[6]])
-                cnt += 1
-
-            # add one conformation (in Angstrom) and store its box size in
-            # temporary list
-            self.add_xyz(np.array(d).astype(float) * 10)
-            b.append(fin.readline().split())
-
-            line = fin.readline()  # attempt to get header of next frame
-
-        # store data information and box size for every frame
-        self.properties['box'] = np.array(b).astype(float) * 10
-
-
-        #building dataframe
-        data = np.array(d_data).astype(str)
-        cols = ["atom", "index", "name", "resname", "chain", "resid", "occupancy", "beta", "atomtype"]
-        idx = np.arange(len(data))
-        self.data = pd.DataFrame(data, index=idx, columns=cols)
-
-        #add additional information about van der waals radius and atoms charge
-        self.data['radius'] = np.ones(len(d_data)) * self.know('atom_vdw')['.']
-        self.data['charge'] = np.zeros(len(d_data))
-
-        fin.close()
-
 
     def get_atoms_ccs(self):
         '''
@@ -1186,7 +1216,8 @@ class Molecule(Structure):
         M.data = M.data.reset_index(drop=True)
         M.data["index"] = idx
         M.current = 0
-        M.points = M.coordinates[M.current]
+        #M.points = M.coordinates[M.current]
+        M.points = M.coordinates.view()[M.current]
 
         M.properties['center'] = M.get_center()
 
@@ -1275,13 +1306,15 @@ class Molecule(Structure):
 
         return d
 
-    def write_pdb(self, outname, conformations=[], index=[]):
+    def write_pdb(self, outname, conformations=[], index=[], split_struc=True, dssp=False):
         '''
         overload superclass method for writing (multi)pdb.
 
         :param outname: name of pdb file to be generated.
         :param index: indices of atoms to write to file. If empty, all atoms are returned. Index values obtaineable with a call like: index=molecule.atomselect("A", [1, 2, 3], "CA", True)[1]
         :param conformations: list of conformation indices to write to file. By default, a multipdb with all conformations will be produced.
+        :param split_struc: Guess chain split on structure being written. Default: True. Set to False if protein is broken, but should retain chain lettering and doesn't have chain breaks.
+        :param dssp: If using DSSP secondary structure check, requires that CRYST be the first line by default (hence write that line)
         '''
 
         # store current frame, so it will be reestablished after file output is
@@ -1299,6 +1332,8 @@ class Molecule(Structure):
                 raise Exception("ERROR: requested coordinate index %s, but only %s are available" %(np.max(conformations), len(self.coordinates)))
 
         f_out = open(outname, "w")
+        if dssp:
+            f_out.write("CRYST1    1.000    1.000    1.000  90.00  90.00  90.00 P 1           1") # only if doing secondary structure check
 
         for cnt, f in enumerate(frames):
             # get all informations from PDB (for current conformation) in a list
@@ -1313,9 +1348,12 @@ class Molecule(Structure):
                 idx_val = vhex(idx_val)   # convert index values to hexidecimal
                 idx_val = [num[2:] for num in idx_val]  # remove 0x at start of hexidecimal number
 
-            # prep for termination lines
-            no, split, _ = self.guess_chain_split()
-            split = np.asarray(split[1:]) -1 # don't need starting atom, and we want to shift down to end of last residue
+            # prep for termination lines - turn off split? (just skip below steps)
+            if split_struc:
+                no, split, _ = self.guess_chain_split()
+                split = np.asarray(split[1:]) -1 # don't need starting atom, and we want to shift down to end of last residue
+            else:
+                no = 1
 
             if no == 1:
                 for i in range(0, len(d), 1):
@@ -1591,13 +1629,13 @@ class Molecule(Structure):
                 raise Exception("DSSPPATH environment variable undefined")
 
         # generate temporary PDB and calculate secondary structure using DSSP
-        self.write_pdb("tmp.pdb", conformations=[self.current])
+        self.write_pdb("tmp.pdb", conformations=[self.current], split_struc=False, dssp=True)
 
         #TMP: assign all atoms to structure
         #subprocess.check_call('~/bin/amber16_tmp/bin/tleap -f build > /dev/null', shell=True)
         try:
             import subprocess
-            subprocess.check_call("%s -i tmp.pdb -o result.dssp"%dssp_path, shell=True)
+            subprocess.check_call("%s tmp.pdb -o result.dssp"%dssp_path, shell=True)
             fin=open("result.dssp","r")
         except Exception as e:
             raise Exception("Could not calculate secondary structure! %s"%e)
@@ -1629,6 +1667,43 @@ class Molecule(Structure):
         os.remove("tmp.pdb")
 
         return np.array(secstruct) #(secstruct[0:210])
+
+    def renumber_resid_keep_chains(self, atom_thresh=30, start_from=1):
+        '''
+        Renumber resnumbers (starting from start_from variable), but base chain renumber resetting on pre-defined chain letters 
+        (i.e. not the structure.) Useful for insertion/grafting of motifs of arbitrary length, which disrupt the renumbering, or 
+        when the structure is broken and you want two or more discontinuous segements to have a single chain letter, and continuous resnums.
+        
+        :param atom_thresh: Threshold number of atoms that we count within a single residue, before we consider other residues with similar properties (chain, resnum) as seperate. Warning - if you have a very small protein or segements this might cause an issue. (default 30 from typ with H)
+        :param start_from: Start counting resnums from this value (default 1)
+        '''
+
+        CA_idx = np.asarray(self.atomselect("*", "*", "CA", get_index=True)[1])
+        resnum = np.asarray(self.data['resid'][CA_idx])
+        # chain for each resid
+        chains = np.asarray(self.data['chain'][CA_idx])
+
+        # start residue numbering from 1. Change when chain break occurs (in file, not in structure)
+        res_count = 1
+        for cnt, val in enumerate(CA_idx):
+            # maximum AA length is 27 (tryp with hydrogens), set greater than 30 as threashold
+            # full residue index set
+            full_res = self.atomselect(chains[cnt], [resnum[cnt]], "*", get_index=True)[1]
+        
+            # now remove residues that have similar properties, but are not the same
+            full_res = np.asarray([x for x in full_res - val if np.abs(x) <= 30]) + val
+        
+            # now renumber
+            self.data["resid"][full_res] = res_count
+        
+            try:
+                # reset numbering if chain letter changes
+                if chains[cnt] == chains[cnt+1]:
+                    res_count += 1
+                else:
+                    res_count = 1
+            except IndexError:
+                continue
 
 
     def get_couples(self, idx, cutoff):

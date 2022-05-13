@@ -1,4 +1,4 @@
-# Copyright (c) 2014-2021 Matteo Degiacomi
+# Copyright (c) 2014-2022 Matteo Degiacomi
 #
 # BiobOx is free software ;
 # you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation ;
@@ -115,7 +115,7 @@ class Density(Structure):
         else:
             try:
                 self.place_points()
-            except Exception as e:
+            except Exception:
                 pass
 
             self.properties['format'] = format
@@ -242,7 +242,7 @@ class Density(Structure):
         if self.properties['delta'][2, 2] != 1:
             scale_z = (self.properties['delta'][2, 2] - 1.0) / (scaled_size[2] - size[2]) * (scaled_size[2] - self.properties['radius'])
         else:
-            scale_z = 1
+            scale_z = 1.0
         # create structure data (ensemble of points and their center, and store
         # its geometric center)
         points = np.transpose(np.where(self.properties['density'] > thresh)) * np.array([scale_x, scale_y, scale_z]) + self.properties['origin'] + np.ones(3) * self.properties['radius']
@@ -368,7 +368,7 @@ class Density(Structure):
             try:
                 self.place_points(thresh)
                 vol = self.get_volume()
-            except Exception as e:
+            except Exception:
                 vol = 0.0
 
             print("threshold=%s, error=%s" % (thresh, vol * density - mass))
@@ -379,7 +379,7 @@ class Density(Structure):
 
         try:
             self.place_points(bestthresh)
-        except Exception as ex:
+        except Exception:
             pass
 
         return r
@@ -400,7 +400,7 @@ class Density(Structure):
                 self.place_points(thresh, noise_filter)
                 vol = self.get_volume()
                 ccs = bb.ccs(self)
-            except Exception as ex:
+            except Exception:
                 vol = 0
                 ccs = 0
 
@@ -436,7 +436,7 @@ class Density(Structure):
         return self.properties['scan'][
             np.argmin(np.abs(self.properties['scan'][:, 2] - ccs))]
 
-    def threshold_vol_ccs(self, low="", high="", sampling_points=1000, append=False, noise_filter=0.01):
+    def threshold_vol_ccs(self, low="", high="", sampling_points=1000, append=False, noise_filter=0.01, verbose=False):
         '''
         return the volume to threshold to CCS relationship
 
@@ -457,11 +457,13 @@ class Density(Structure):
                 self.place_points(thresh, noise_filter=noise_filter)
                 vol = self.get_volume()
                 ccs = bb.ccs(self)
-            except Exception as ex:
+            except Exception:
                 vol = 0
                 ccs = 0
 
-            print("thresh: %s, vol=%s, ccs=%s (%s points)" % (thresh, vol, ccs, len(self.points)))
+            if verbose:
+                print("thresh: %s, vol=%s, ccs=%s (%s points)" % (thresh, vol, ccs, len(self.points)))
+            
             result.append([thresh, vol, ccs])
 
         r = np.array(result)
@@ -504,7 +506,7 @@ class Density(Structure):
             try:
                 self.place_points(thresh)
                 vol = self.get_volume()
-            except Exception as ex:
+            except Exception:
                 vol = 0
 
             mass_model = vol * density
@@ -532,7 +534,7 @@ class Density(Structure):
 
         try:
             self.place_points(bestthresh)
-        except Exception as ex:
+        except Exception:
             pass
 
         return r
@@ -598,7 +600,7 @@ class Density(Structure):
 
         fout.close()
 
-    def export_as_pdb(self, outname, step, threshold=0.1):
+    def export_as_pdb(self, outname, threshold=0.1, step=np.nan):
         '''
         Write a pdb file with points where the density exceeds a threshold
 
@@ -608,7 +610,33 @@ class Density(Structure):
         '''
 
         # @todo assign spheres beta factor to associated density value
-
+        if np.isnan(step):
+            
+            size = np.max(np.transpose(np.where(self.properties['density'] > threshold)), axis=0) - np.min(np.transpose(np.where(self.properties['density'] > threshold)), axis=0)
+            scaled_size = np.max(np.transpose(np.where(self.properties['density'] > threshold)) * np.diag(self.properties['delta']), axis=0)-np.min(np.transpose(np.where(self.properties['density'] > threshold)) * np.diag(self.properties['delta']), axis=0)
+            
+            if self.properties['delta'][0, 0] != 1:
+                scale_x = (self.properties['delta'][0, 0] - 1.0) / (scaled_size[0] - size[0]) * (scaled_size[0] - self.properties['radius'])
+            else:
+                scale_x = 1.0
+    
+            if self.properties['delta'][1, 1] != 1:
+                scale_y = (self.properties['delta'][1, 1] - 1.0) / (scaled_size[1] - size[1]) * (scaled_size[1] - self.properties['radius'])
+            else:
+                scale_y = 1.0
+    
+            if self.properties['delta'][2, 2] != 1:
+                scale_z = (self.properties['delta'][2, 2] - 1.0) / (scaled_size[2] - size[2]) * (scaled_size[2] - self.properties['radius'])
+            else:
+                scale_z = 1.0           
+ 
+        else:
+            
+            scale_x = scale_y = scale_z = step
+            print("buh")
+            
+        print(scale_x, scale_y, scale_z)
+    
         dens = self.properties['density']
         origin = self.properties['origin']
 
@@ -624,9 +652,10 @@ class Density(Structure):
             for ypos in range(0, dens.shape[1], 1):
                 for zpos in range(0, dens.shape[2], 1):
                     if dens[xpos, ypos, zpos] > threshold:
-                        x_coord = float(xpos / step) + origin[0]
-                        y_coord = float(ypos / step) + origin[1]
-                        z_coord = float(zpos / step) + origin[2]
+                        x_coord = float(xpos / scale_x) + origin[0]
+                        y_coord = float(ypos / scale_y) + origin[1]
+                        z_coord = float(zpos / scale_z) + origin[2]
+                        
                         L = '%-6s%5s  %-4s%-4s  DIS    %8.3f%8.3f%8.3f  1.00  0.00            \n'%(identifier, cnt, symbol, symbol, x_coord, y_coord, z_coord)
                         fout.write(L)
                         cnt += 1
@@ -642,7 +671,7 @@ class Density(Structure):
 
         try:
             fin = open(filename, "r")
-        except Exception as e:
+        except Exception:
             raise Exception('opening of file %s failed!' % filename)
 
         d = []
@@ -656,7 +685,7 @@ class Density(Structure):
                     w = np.array(w).astype(float)
                     for i in range(len(w)):
                         d.append(w[i])
-                except Exception as e:
+                except Exception:
                     continue
                 # get coordinates
             elif len(w) > 2 and w[0] == "object" and w[3] == "gridpositions":
@@ -678,7 +707,7 @@ class Density(Structure):
                 (self.properties['size'][0],
                  self.properties['size'][1],
                  self.properties['size'][2]))
-        except Exception as ex:
+        except Exception:
             raise Exception("reshaping of dx data failed! Dimensions and dataset size are inconsistent!")
 
     def _import_mrc(self, filename, fileformat):
@@ -720,10 +749,8 @@ class Density(Structure):
         return self.properties['delta'][0, 0] * self.properties['delta'][1, 1] * self.properties['delta'][2, 2] * len(self.points)
 
 
-
 if __name__ == "__main__":
 
-    import os
     import biobox as bb
 
     print("loading density...")
