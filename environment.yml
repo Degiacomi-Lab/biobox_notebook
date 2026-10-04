@@ -1,12 +1,15 @@
 name: notebook_env
 channels:
-  - defaults
+  - conda-forge
 dependencies:
-  - python=3.9
-  - cython
+  - python=3.12
   - numpy
   - scipy
   - scikit-learn
   - pandas
   - matplotlib
   - nglview
+  - pip
+  - pip:
+    # biobox is compiled from its GitHub repository (default branch)
+    - git+https://github.com/Degiacomi-Lab/biobox
