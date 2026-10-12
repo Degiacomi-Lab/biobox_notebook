@@ -4,7 +4,7 @@ A Jupyter notebook demonstrating Biobox main functionalities
 
 Biobox's documentation is available at https://biobox.readthedocs.io
 
-To run the notebook on your computer, create its environment (which installs Biobox from https://github.com/Degiacomi-Lab/biobox, so a C compiler is needed) and start Jupyter:
+To run the notebook on your computer, create its environment (which installs Biobox from conda-forge) and start Jupyter:
 
 ```
 conda env create -f environment.yml

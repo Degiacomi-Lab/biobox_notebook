@@ -9,7 +9,4 @@ dependencies:
   - pandas
   - matplotlib
   - nglview
-  - pip
-  - pip:
-    # biobox is compiled from its GitHub repository (default branch)
-    - git+https://github.com/Degiacomi-Lab/biobox
+  - biobox>=2.0
